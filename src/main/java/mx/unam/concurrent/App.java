@@ -2,29 +2,28 @@ package mx.unam.concurrent;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Phaser;
 import java.util.stream.IntStream;
 
 public class App {
     public static void main(String[] args) {
         int numProcessors = Runtime.getRuntime().availableProcessors();
-        CyclicBarrier cyclicBarrier = new CyclicBarrier(numProcessors,
-                                                        new CyclicTask());
+        Phaser phaser = new Phaser();
         ExecutorService executor = Executors.newFixedThreadPool(numProcessors);
         System.out.println("Spawning Threads");
+        phaser.register(); // registering main thread
         IntStream.range(0, numProcessors)
             .forEach(i -> {
                     String name = String.format("Thread-%d", i);
-                    executor.execute(new WorkerThread(cyclicBarrier, name));
+                    executor.execute(new WorkerThread(phaser, name));
                 });
         System.out.println("Spawning Finished");
+        phaser.arriveAndDeregister();
         stop(executor);
     }
-
     public static void stop(ExecutorService executor) {
         try {
             executor.shutdown();
@@ -40,50 +39,43 @@ public class App {
         }
     }
 }
-
 class WorkerThread implements Runnable {
-    private CyclicBarrier cyclicBarrier;
+    private Phaser phaser;
     private String name;
-
-    public WorkerThread(CyclicBarrier cyclicBarrier, String name) {
+    public WorkerThread(Phaser phaser, String name) {
         this.name = name;
-        this.cyclicBarrier = cyclicBarrier;
+        this.phaser = phaser;
+        this.phaser.register();
     }
-
     public void run() {
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
-            System.out.printf("%s: Doing Step 1 Work on %s\n",
-                              getFormattedDate(sdf), name);
-            sleep(getRandomWaitTime());
-            System.out.printf("%s: Doing Step 1 more work on %s\n",
-                              getFormattedDate(sdf), name);
-            sleep(getRandomWaitTime());
-            System.out.printf("%s: Finished Step 1 work on %s\n",
-                              getFormattedDate(sdf), name);
-            // Await returns for the other threads
-            int count = cyclicBarrier.await();
-            System.out.printf("%s: Cyclic Barrier count on %s is %d\n",
-                              getFormattedDate(sdf), name, count);
-            // If all threads have arrived 2 lines above, reset the barrier
-            if(count == 0) {
-                cyclicBarrier.reset();
-            }
-            System.out.printf("%s: Doing Step 2 Batch of Work on %s\n",
-                              getFormattedDate(sdf), name);
-            sleep(getRandomWaitTime());
-            System.out.printf("%s: Doing Some more Step 2 Batch of work on %s\n",
-                              getFormattedDate(sdf), name);
-            sleep(getRandomWaitTime());
-            System.out.printf("%s: Finished Step 2 Batch of work on %s\n",
-                              getFormattedDate(sdf), name);
-            count = cyclicBarrier.await();
-            String template = "%s: Cyclic Barrier count end of " +
-                "Step 2 Batch of work on %s is %d\n";
-            System.out.printf(template, getFormattedDate(sdf), name, count);
-        } catch(InterruptedException | BrokenBarrierException e) {
-            e.printStackTrace();
-        }
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        System.out.printf("%s:[%s] Doing Step 1 Work\n",
+                          getFormattedDate(sdf), name);
+        sleep(getRandomWaitTime());
+        System.out.printf("%s:[%s] Doing Step 1 more work\n",
+                          getFormattedDate(sdf), name);
+        sleep(getRandomWaitTime());
+        System.out.printf("%s:[%s] Finished Step 1 work\n",
+                          getFormattedDate(sdf), name);
+        phaser.arriveAndAwaitAdvance();
+        System.out.printf("%s:[%s] Past the barrier.\n",
+                          getFormattedDate(sdf), name);
+        int phase = phaser.getPhase();
+        // here we had a reset with CyclicBarrier
+        System.out.printf("%s:[%s] Phaser count on %d\n",
+                          getFormattedDate(sdf), name, phase);
+        System.out.printf("%s:[%s] Doing Step 2 Batch of Work\n",
+                          getFormattedDate(sdf), name);
+        sleep(getRandomWaitTime());
+        System.out.printf("%s:[%s] Doing Some more Step 2 Batch of work\n",
+                          getFormattedDate(sdf), name);
+        sleep(getRandomWaitTime());
+        System.out.printf("%s:[%s] Finished Step 2 Batch of work\n",
+                          getFormattedDate(sdf), name);
+        phaser.arriveAndAwaitAdvance();
+        phase = phaser.getPhase();
+        System.out.printf("%s:[%s] Phaser finish on: %d\n",
+                          getFormattedDate(sdf), name, phase);
     }
     public static void sleep(int milliseconds) {
         try {
@@ -97,13 +89,5 @@ class WorkerThread implements Runnable {
     }
     private int getRandomWaitTime() {
         return (int) ((Math.random() + 1) * 1000);
-    }
-}
-class CyclicTask implements Runnable {
-    private int count = 1;
-
-    @Override
-    public void run() {
-        System.out.printf("Cyclic Barrier Finished %d\n", count++);
     }
 }

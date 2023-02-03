@@ -1,114 +1,109 @@
 package mx.unam.concurrent;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 public class App {
-
-    public static void main(String[] argv){
+    public static void main(String[] args) {
         int numProcessors = Runtime.getRuntime().availableProcessors();
-        ExecutorService consumerExecutors = Executors.newFixedThreadPool(numProcessors);
-        List<Message> queue = Collections.synchronizedList(new LinkedList<Message>());
-        CountDownLatch doneSignal = new CountDownLatch(1);
-        CountDownLatch doneProducingSignal = new CountDownLatch(1);
-        CountDownLatch doneConsumingSignal = new CountDownLatch(numProcessors);
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(numProcessors,
+                                                        new CyclicTask());
+        ExecutorService executor = Executors.newFixedThreadPool(numProcessors);
+        System.out.println("Spawning Threads");
         IntStream.range(0, numProcessors)
             .forEach(i -> {
-                    String name = String.format("%d", i);
-                    consumerExecutors.execute(new Consumer(name, queue,
-                                                           doneProducingSignal,
-                                                           doneConsumingSignal));
+                    String name = String.format("Thread-%d", i);
+                    executor.execute(new WorkerThread(cyclicBarrier, name));
                 });
-        queue.add(new Message( "1", 15000, doneSignal));
-        queue.add(new Message( "2", 15000, new CountDownLatch(1)));
-        doneProducingSignal.countDown();
-        boolean doneProcessing = false;
-        try {
-            doneProcessing = doneSignal.await(3, TimeUnit.SECONDS);
-        } catch (InterruptedException e1) {
-            e1.printStackTrace();
-        }
-        if ( doneProcessing ){
-            System.out.println( "Processing is done.");
-        } else {
-            System.out.println( "Processing is still running.");
-        }
+        System.out.println("Spawning Finished");
+        stop(executor);
+    }
 
-        System.out.println( "Shutting down the consumerExecutors");
-        doneProducingSignal.countDown();
+    public static void stop(ExecutorService executor) {
         try {
-            doneConsumingSignal.await();
-        } catch (InterruptedException e1) {
-            e1.printStackTrace();
+            executor.shutdown();
+            // give it time to finish
+            executor.awaitTermination(60, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+            ex.printStackTrace();
+        } finally {
+            if (!executor.isTerminated()) {
+                System.out.println("Termination interrupted");
+            }
+            executor.shutdown();
         }
-        consumerExecutors.shutdown();
-        System.out.println( "Done");
     }
 }
 
-class Consumer implements Runnable {
-    private String id;
-    private List<Message> queue;
-    private CountDownLatch doneProducing;
-    private CountDownLatch doneConsuming;
+class WorkerThread implements Runnable {
+    private CyclicBarrier cyclicBarrier;
+    private String name;
 
-    Consumer(String id, List<Message> queue,
-             CountDownLatch doneProducing,
-             CountDownLatch doneConsuming){
-        this.id = id;
-        this.queue = queue;
-        this.doneProducing = doneProducing;
-        this.doneConsuming = doneConsuming;
+    public WorkerThread(CyclicBarrier cyclicBarrier, String name) {
+        this.name = name;
+        this.cyclicBarrier = cyclicBarrier;
     }
+
+    public void run() {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+            System.out.printf("%s: Doing Step 1 Work on %s\n",
+                              getFormattedDate(sdf), name);
+            sleep(getRandomWaitTime());
+            System.out.printf("%s: Doing Step 1 more work on %s\n",
+                              getFormattedDate(sdf), name);
+            sleep(getRandomWaitTime());
+            System.out.printf("%s: Finished Step 1 work on %s\n",
+                              getFormattedDate(sdf), name);
+            // Await returns for the other threads
+            int count = cyclicBarrier.await();
+            System.out.printf("%s: Cyclic Barrier count on %s is %d\n",
+                              getFormattedDate(sdf), name, count);
+            // If all threads have arrived 2 lines above, reset the barrier
+            if(count == 0) {
+                cyclicBarrier.reset();
+            }
+            System.out.printf("%s: Doing Step 2 Batch of Work on %s\n",
+                              getFormattedDate(sdf), name);
+            sleep(getRandomWaitTime());
+            System.out.printf("%s: Doing Some more Step 2 Batch of work on %s\n",
+                              getFormattedDate(sdf), name);
+            sleep(getRandomWaitTime());
+            System.out.printf("%s: Finished Step 2 Batch of work on %s\n",
+                              getFormattedDate(sdf), name);
+            count = cyclicBarrier.await();
+            String template = "%s: Cyclic Barrier count end of " +
+                "Step 2 Batch of work on %s is %d\n";
+            System.out.printf(template, getFormattedDate(sdf), name, count);
+        } catch(InterruptedException | BrokenBarrierException e) {
+            e.printStackTrace();
+        }
+    }
+    public static void sleep(int milliseconds) {
+        try {
+            TimeUnit.MILLISECONDS.sleep(milliseconds);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+    private String getFormattedDate(SimpleDateFormat sdf) {
+        return sdf.format(new Date());
+    }
+    private int getRandomWaitTime() {
+        return (int) ((Math.random() + 1) * 1000);
+    }
+}
+class CyclicTask implements Runnable {
+    private int count = 1;
 
     @Override
     public void run() {
-        while(doneProducing.getCount() != 0 || !queue.isEmpty()){
-            Message m = null;
-            synchronized(queue){
-                if(!queue.isEmpty()) m = queue.remove(0);
-            }
-            if(m != null) consume(m);
-        }
-        System.out.printf("Consumer %s done\n", id);
-        doneConsuming.countDown();
-    }
-    public void consume(Message m ){
-        System.out.printf("Consumer %s consuming message %s\n",
-                          id, m.getId());
-        try {
-            Thread.sleep(m.getTime());
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        System.out.printf("Consumer %s done consumming msssage %s\n",
-                          id, m.getId());
-        m.getLatch().countDown();
-    }
-}
-
-class Message {
-    private String id;
-    private int time;
-    private CountDownLatch latch;
-    Message(String id, int time, CountDownLatch latch){
-        this.id = id;
-        this.time = time;
-        this.latch = latch;
-    }
-    public String getId() {
-        return id;
-    }
-    public int getTime() {
-        return time;
-    }
-    public CountDownLatch getLatch() {
-        return latch;
+        System.out.printf("Cyclic Barrier Finished %d\n", count++);
     }
 }

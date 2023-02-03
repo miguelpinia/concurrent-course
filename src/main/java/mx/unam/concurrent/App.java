@@ -1,48 +1,27 @@
 package mx.unam.concurrent;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
+import java.util.stream.IntStream;
 
 public class App {
-    public static void main(String args[]) throws ExecutionException {
-        try {
-            ExecutorService executor = Executors.newFixedThreadPool(1);
+    public static void main(String[] args) {
+        Counter c = new Counter();
+        c.test();
+    }
+}
 
-            List<Callable<String>> callables = Arrays
-                .asList(
-                        () -> {
-                            TimeUnit.SECONDS.sleep(2);
-                            return "task 1";
-                        },
-                        () -> {
-                            TimeUnit.SECONDS.sleep(2);
-                            return "task 2";
-                        },
-                        () -> {
-                            TimeUnit.SECONDS.sleep(2);
-                            return "task 3";
-                        });
-
-            executor.invokeAll(callables)
-                .stream()
-                .map(future -> {
-                        try {
-                            return future.get();
-                        } catch (Exception e) {
-                            throw new IllegalStateException(e);
-                        }
-                    })
-                .forEach(System.out::println);
-            executor.shutdown();
-        }
-        catch (InterruptedException e) {
-            System.out.println("Error " + e.getMessage());
-            e.printStackTrace();
-        }
+class Counter {
+    int count = 0;
+    void increment() {
+        count = count + 1;
+    }
+    public void test() {
+        int numProcessors = Runtime.getRuntime().availableProcessors();
+        ExecutorService executor = Executors.newFixedThreadPool(numProcessors);
+        IntStream.range(0, 10000)
+            .forEach(i -> executor.submit(this::increment));
+        executor.shutdown();
+        System.out.println(count);
     }
 }

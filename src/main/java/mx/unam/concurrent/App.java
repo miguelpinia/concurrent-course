@@ -6,12 +6,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class App {
     public static void main(String args[]) throws ExecutionException {
         Callable<Integer> task = () -> {
             try {
-                TimeUnit.SECONDS.sleep(2);
+                TimeUnit.SECONDS.sleep(4);
                 return 42;
             }
             catch (InterruptedException e) {
@@ -25,13 +26,14 @@ public class App {
         try {
             Future<Integer> future = executor.submit(task);
             System.out.printf("Future done? %b\n", future.isDone());
-            Integer result = future.get();
+            Integer result = future.get(1, TimeUnit.SECONDS);
             System.out.printf("Future done? %b\n", future.isDone());
             System.out.printf("Result: %d\n", result);
             executor.shutdown();
         }
-        catch (InterruptedException | ExecutionException e) {
-            System.out.printf("Error %s\n", e.getMessage());
+        catch (InterruptedException | ExecutionException
+               | TimeoutException e) {
+            System.out.printf("Error %s\n", e.getLocalizedMessage());
             e.printStackTrace();
             executor.shutdown();
         }

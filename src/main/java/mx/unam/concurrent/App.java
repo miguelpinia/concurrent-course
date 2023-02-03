@@ -3,39 +3,56 @@ package mx.unam.concurrent;
 public class App {
 
     public static void main(String[] args) {
-        MyThread1 obj1 = new MyThread1();
-        MyThread2 obj2 = new MyThread2();
-        Thread t = new Thread(new MyRunnable());
+        MyThread t1 = new MyThread("First Thread");
+        MyThread t2 = new MyThread("Second Thread");
 
-        obj1.start();
-        obj2.start();
-        t.start();
+        try {
+            Thread.sleep(500); // Sleeping for 500ms
+            t1.stop();
+            t2.stop();
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            System.out.format("Interrupted Exception: %s\n",
+                    e.getMessage());
+            e.printStackTrace();
+        }
+        System.out.println("Exiting the main thread");
     }
 }
 
-class MyThread1 extends Thread {
+class MyThread implements Runnable {
+
+    private boolean exit;
+    private String name;
+    Thread t;
+
+    public MyThread(String threadName) {
+        name = threadName;
+        t = new Thread(this, name);
+        System.out.format("New Thread: %s\n", t.toString());
+        exit = false;
+        t.start(); // Starting the thread
+    }
+
     @Override
     public void run() {
-        for (int i = 0; i < 10; i++) {
-            System.out.println(String.format("Thread 1 is running. Iter: %d", i));
+        int i = 0;
+        while (!exit) {
+            System.out.format("%s: %d\n", name, i);
+            i++;
+            try {
+                Thread.sleep(100); // Sleeping for 100ms
+            }
+            catch (InterruptedException e) {
+                System.out.format("Interrupted Exception:  %s\n",
+                                  e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
-}
 
-class MyThread2 extends Thread {
-    @Override
-    public void run() {
-        for (int i = 0; i < 10; i++) {
-            System.out.println(String.format("Thread 2 is running. Iter: %d", i));
-        }
-    }
-}
+    public void stop() {
+        exit = true;
 
-class MyRunnable implements Runnable {
-    @Override
-    public void run() {
-        for (int i = 0; i < 10; i++) {
-            System.out.println(String.format("My runnable object is running. Iter: %d", i));
-        }
     }
 }

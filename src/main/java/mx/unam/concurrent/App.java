@@ -16,26 +16,20 @@ public class App {
 class MyThread1 extends Thread {
     @Override
     public void run() {
-        for (int i = 0; i < 10; i++) {
-            System.out.println(String.format("Thread 1 is running. Iter: %d", i));
-        }
+        System.out.println("Thread 1 is running");
     }
 }
 
 class MyThread2 extends Thread {
     @Override
     public void run() {
-        for (int i = 0; i < 10; i++) {
-            System.out.println(String.format("Thread 2 is running. Iter: %d", i));
-        }
+        System.out.println("Thread 2 is running");
     }
 }
 
 class MyRunnable implements Runnable {
     @Override
     public void run() {
-        for (int i = 0; i < 10; i++) {
-            System.out.println(String.format("My runnable object is running. Iter: %d", i));
-        }
+        System.out.println("My runnable object is running");
     }
 }

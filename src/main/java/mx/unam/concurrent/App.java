@@ -23,6 +23,7 @@ public class App {
         System.out.println("Spawning Finished");
         phaser.arriveAndDeregister();
         stop(executor);
+        // executor.shutdown();
     }
     public static void stop(ExecutorService executor) {
         try {
@@ -76,6 +77,7 @@ class WorkerThread implements Runnable {
         phase = phaser.getPhase();
         System.out.printf("%s:[%s] Phaser finish on: %d\n",
                           getFormattedDate(sdf), name, phase);
+        phaser.arriveAndDeregister();
     }
     public static void sleep(int milliseconds) {
         try {

@@ -40,9 +40,9 @@ public class App {
             System.out.println( "Processing is still running.");
         }
 
-        System.out.println( "Shutting down the consumerExecutors");
         doneProducingSignal.countDown();
         try {
+            System.out.println( "Shutting down the consumerExecutors");
             doneConsumingSignal.await();
         } catch (InterruptedException e1) {
             e1.printStackTrace();
@@ -59,8 +59,8 @@ class Consumer implements Runnable {
     private CountDownLatch doneConsuming;
 
     Consumer(String id, List<Message> queue,
-             CountDownLatch doneProducing,
-             CountDownLatch doneConsuming){
+            CountDownLatch doneProducing,
+            CountDownLatch doneConsuming) {
         this.id = id;
         this.queue = queue;
         this.doneProducing = doneProducing;
@@ -69,30 +69,36 @@ class Consumer implements Runnable {
 
     @Override
     public void run() {
-        while(doneProducing.getCount() != 0 || !queue.isEmpty()){
+        while (doneProducing.getCount() != 0 || !queue.isEmpty()) {
             Message m = null;
-            synchronized(queue){
-                if(!queue.isEmpty()) m = queue.remove(0);
+            synchronized (queue) {
+                if (!queue.isEmpty())
+                    m = queue.remove(0);
             }
-            if(m != null) consume(m);
+            if (m != null)
+                consume(m);
         }
         System.out.printf("Consumer %s done\n", id);
         doneConsuming.countDown();
     }
-    public void consume(Message m ){
+
+    public void consume(Message m) {
         System.out.printf("Consumer %s consuming message %s\n",
-                          id, m.getId());
+                id, m.getId());
         try {
             Thread.sleep(m.getTime());
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        System.out.printf("Consumer %s done consumming msssage %s\n",
-                          id, m.getId());
+        System.out.printf("Consumer %s done consuming message %s\n",
+                id, m.getId());
         m.getLatch().countDown();
     }
 }
 
+/**
+ * Represent a message to be consumed.
+ */
 class Message {
     private String id;
     private int time;
